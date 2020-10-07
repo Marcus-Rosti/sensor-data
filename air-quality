@@ -1,0 +1,14 @@
+[Unit]
+Description=Air Quality monitor
+After=multiuser.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=root
+ExecStart=/usr/bin/java -XX:+UseG1GC -Xmx16m -Dair-quality.adafruit.passkey="CHANGEME" -Dair-quality.adafruit.username="CHANGEME" -jar ~mrosti/bin/air-quality-assembly-0.1.0.jar
+
+[Install]
+WantedBy=multi-user.target

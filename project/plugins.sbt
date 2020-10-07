@@ -1,0 +1,5 @@
+addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.19")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.15.0")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.2")
+addSbtPlugin("ch.epfl.scala" % "sbt-bloop" % "1.4.4")
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.9.21")
