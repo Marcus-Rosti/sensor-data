@@ -1,15 +1,16 @@
 package com.marcus.http
 
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import akka.http.scaladsl.model._
-import akka.stream.scaladsl.{Flow, RetryFlow}
-import com.marcus.Reading
-
-import scala.concurrent.Future
-import scala.concurrent.duration._
+import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.RetryFlow
+import com.marcus.sensor.Reading
 
 class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitPerMinute: Int)(
   implicit system: ActorSystem
@@ -50,14 +51,14 @@ class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitP
 
   def createDataRequest(reading: Reading): Future[(HttpRequest, Reading)] =
     Future {
-      val header = HttpHeader.parse("X-AIO-Key", adafruitKey) match {
-        case ParsingResult.Ok(header, _) => header
-        case _                           => throw new Exception("how did this happen")
+      val headers = HttpHeader.parse("X-AIO-Key", adafruitKey) match {
+        case ParsingResult.Ok(header, _) => Seq(header)
+        case _                           => Seq.empty
       }
       HttpRequest(
         method = HttpMethods.POST,
         uri = s"http://io.adafruit.com/api/v2/$username/feeds/${reading.feed_key}/data",
-        headers = List(header),
+        headers = headers,
         entity = HttpEntity(
           ContentTypes.`application/json`,
           s"""{"value": ${reading.value}, "created_at": "${reading.created_at}"}"""

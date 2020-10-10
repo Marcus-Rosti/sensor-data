@@ -1,22 +1,23 @@
 package com.marcus
 
-import akka.actor.{ActorSystem, CoordinatedShutdown}
+import scala.concurrent.Await
+import scala.concurrent.duration.DurationInt
+import scala.util.Failure
+import scala.util.Success
+
+import akka.NotUsed
+import akka.actor.ActorSystem
+import akka.actor.CoordinatedShutdown
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.HttpHeader.ParsingResult
-import akka.http.scaladsl.model._
 import akka.stream.scaladsl._
-import akka.{Done, NotUsed}
 import com.fazecast.jSerialComm.SerialPort
 import com.marcus.http.AdafruitAccessor
 import com.marcus.sensor.SDS011
-import com.typesafe.config.{Config, ConfigFactory}
-
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Await, Future}
-import scala.util.{Failure, Success}
-
-case class Reading(value: Double, feed_key: String, created_at: DateTime = DateTime.now)
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import akka.http.scaladsl.model.HttpResponse
+import com.marcus.sensor.Reading
 
 object Application extends App {
 
@@ -32,18 +33,15 @@ object Application extends App {
   val adafruitRateLimitPerMinute: Int = config.getInt("adafruit.rate-limit")
   val adafruitKey: String = config.getString("adafruit.passkey")
 
-  private val header = HttpHeader.parse("X-AIO-Key", adafruitKey) match {
-    case ParsingResult.Ok(header, _) => header
-    case _                           => throw new Exception("how did this happen")
-  }
   val sensorRateLimit: Int = config.getInt("sensor.sds011.rate-limit")
   val sensorPortName: String = config.getString("sensor.sds011.port-name")
 
   val comPort: SerialPort = SerialPort.getCommPort(sensorPortName)
 
-  val feedData = new SDS011(comPort, pm25FeedName, pm10FeedName, sensorRateLimit).feedData
+  val feedData: Source[Reading, NotUsed] =
+    new SDS011(comPort, pm25FeedName, pm10FeedName, sensorRateLimit).feedData
 
-  val httpFlow = new AdafruitAccessor(
+  val httpFlow: Flow[Reading, HttpResponse, NotUsed] = new AdafruitAccessor(
     username,
     adafruitKey,
     adafruitRateLimitPerMinute
@@ -57,51 +55,10 @@ object Application extends App {
     log.warning("Shutting down actor system!!")
   }
 
-  def post(reading: Reading): Future[Done] = {
-
-    RestartSource
-      .withBackoff(
-        minBackoff = 500.milliseconds,
-        maxBackoff = 10.minutes,
-        randomFactor = 0.2,
-        maxRestarts = 10
-      ) { () =>
-        Source
-          .single(
-            HttpRequest(
-              method = HttpMethods.POST,
-              uri = s"http://io.adafruit.com/api/v2/$username/feeds/${reading.feed_key}/data",
-              headers = List(header),
-              entity = HttpEntity(
-                ContentTypes.`application/json`,
-                s"""{"value": ${reading.value}, "created_at": "${reading.created_at}"}"""
-              )
-            )
-          )
-          .mapAsync(1)(hr =>
-            Http().singleRequest(hr).andThen { case Success(el) => el.entity.discardBytes() }
-          )
-          .mapAsync(parallelism = 1) {
-            case HttpResponse(StatusCodes.OK, _, _, _) => Future.successful(Done)
-            case HttpResponse(StatusCodes.TooManyRequests, _, _, _) =>
-              log.warning("SLOW DOWN YOUR REQUESTS")
-              throw new Exception("Slow down")
-            case HttpResponse(statusCode, _, _, _) =>
-              log.error(s"Some other error $statusCode")
-              throw new Exception(s"$statusCode")
-          }
-      }
-      .runWith(Sink.head)
-      .recover { _ =>
-        log.error("I give up")
-        Done
-      }
-
-  }
-
-  lazy val mainFlow =
+  lazy val mainFlow: Source[HttpResponse, NotUsed.type] =
     feedData
       .log("feedData")
+      .throttle(adafruitRateLimitPerMinute, 1.minute)
       .async
       .via(httpFlow)
       .log("sent")
