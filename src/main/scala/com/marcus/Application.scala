@@ -57,7 +57,7 @@ object Application extends App {
   lazy val mainFlow: Source[HttpResponse, NotUsed.type] =
     feedData
       .log("feedData")
-      .throttle(adafruitRateLimitPerMinute, 1.minute)
+      .throttle(adafruitRateLimitPerMinute - 1, 1.minute)
       .async
       .via(httpFlow)
       .log("sent")
