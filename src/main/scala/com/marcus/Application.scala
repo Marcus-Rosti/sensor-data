@@ -33,7 +33,6 @@ object Application extends App {
   val adafruitRateLimitPerMinute: Int = config.getInt("adafruit.rate-limit")
   val adafruitKey: String = config.getString("adafruit.passkey")
 
-  val sensorRateLimit: Int = config.getInt("sensor.sds011.rate-limit")
   val sensorPortName: String = config.getString("sensor.sds011.port-name")
 
   val comPort: SerialPort = SerialPort.getCommPort(sensorPortName)
