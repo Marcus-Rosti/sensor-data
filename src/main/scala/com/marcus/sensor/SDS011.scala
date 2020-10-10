@@ -13,8 +13,7 @@ import akka.stream.scaladsl.Source
 import akka.stream.scaladsl.StreamConverters
 import com.fazecast.jSerialComm.SerialPort
 
-class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String, rateLimit: Int)(
-  implicit
+class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String)(implicit
   log: LoggingAdapter,
   executionContext: ExecutionContext
 ) {
@@ -55,6 +54,7 @@ class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String, ra
         )
       }
       .log("readings")
+      .async
       .conflate((oldReadings, newReadings) => {
         Seq(
           alphaEmwa(oldReadings.head, newReadings.head),
@@ -62,7 +62,6 @@ class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String, ra
         )
       })
       .log("conflated")
-      .throttle(rateLimit, 1.minute)
       .mapConcat(identity)
       .mapMaterializedValue(_ => NotUsed)
       .watchTermination() { (_, done) =>

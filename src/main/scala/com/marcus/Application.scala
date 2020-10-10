@@ -39,7 +39,7 @@ object Application extends App {
   val comPort: SerialPort = SerialPort.getCommPort(sensorPortName)
 
   val feedData: Source[Reading, NotUsed] =
-    new SDS011(comPort, pm25FeedName, pm10FeedName, sensorRateLimit).feedData
+    new SDS011(comPort, pm25FeedName, pm10FeedName).feedData
 
   val httpFlow: Flow[Reading, HttpResponse, NotUsed] = new AdafruitAccessor(
     username,

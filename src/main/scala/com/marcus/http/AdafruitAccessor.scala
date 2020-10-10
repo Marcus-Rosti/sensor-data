@@ -19,7 +19,7 @@ class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitP
 
   lazy val httpFlow: Flow[Reading, HttpResponse, NotUsed] = {
     Flow[Reading]
-      .mapAsync(2)(createDataRequest)
+      .mapAsyncUnordered(4)(createDataRequest)
       .log("http")
       .async
       .throttle(adafruitRateLimitPerMinute, 1.minutes)
