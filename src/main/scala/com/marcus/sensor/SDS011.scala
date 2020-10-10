@@ -2,23 +2,22 @@ package com.marcus.sensor
 
 import java.nio.ByteBuffer
 
-import akka.NotUsed
-import akka.event.LoggingAdapter
-import akka.stream.scaladsl.{RestartSource, Source, StreamConverters}
-import com.fazecast.jSerialComm.SerialPort
-import com.marcus.Reading
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+
+import akka.NotUsed
+import akka.event.LoggingAdapter
+import akka.stream.scaladsl.RestartSource
+import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.StreamConverters
+import com.fazecast.jSerialComm.SerialPort
 
 class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String, rateLimit: Int)(
   implicit
   log: LoggingAdapter,
   executionContext: ExecutionContext
 ) {
-
-  val rl = rateLimit
 
   private val alpha = 0.5
 
@@ -46,7 +45,7 @@ class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String, ra
     // Create a source from a future of a source
     StreamConverters
       .fromInputStream(() => comPort.getInputStream)
-      .filter(_.size == 10)
+      .filter(_.size.equals(10))
       .async
       .map(_.toArray)
       .map { ba =>

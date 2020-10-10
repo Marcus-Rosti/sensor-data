@@ -1,6 +1,17 @@
 val AkkaVersion = "2.6.9"
 val AkkaHttpVersion = "10.2.1"
 
+inThisBuild(
+  List(
+    scalaVersion := "2.13.3",
+    semanticdbEnabled := true, // enable SemanticDB
+    semanticdbVersion := scalafixSemanticdb.revision, // use Scalafix compatible version
+    scalafixScalaBinaryVersion := scalaBinaryVersion.value,
+    scalafixOnCompile := true,
+    scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.4.0"
+  )
+)
+
 lazy val root = project
   .in(file("."))
   .enablePlugins(JavaAppPackaging)
@@ -11,7 +22,6 @@ lazy val root = project
           "-opt:l:method,inline",
           "-opt-inline-from:**",
           "-Xlint:_",
-          "-Xfatal-warnings",
           "-explaintypes",
           "-feature",
           "-unchecked",
@@ -21,7 +31,6 @@ lazy val root = project
           "UTF-8"
         ),
     mainClass in assembly := Some("com.marcus.Application"),
-    scalaVersion := "2.13.3",
     libraryDependencies ++= Seq(
           "com.fazecast" % "jSerialComm" % "2.6.2",
           "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
