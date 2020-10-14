@@ -49,11 +49,13 @@ class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitP
 
   }
 
-  def createDataRequest(reading: Reading): Future[(HttpRequest, Reading)] =
+  private def createDataRequest(reading: Reading): Future[(HttpRequest, Reading)] =
     Future {
       val headers = HttpHeader.parse("X-AIO-Key", adafruitKey) match {
         case ParsingResult.Ok(header, _) => Seq(header)
-        case _                           => Seq.empty
+        case _ =>
+          log.error("THIS SHOULDN'T HAPPEN")
+          Seq.empty
       }
       HttpRequest(
         method = HttpMethods.POST,

@@ -1,4 +1,4 @@
-val AkkaVersion = "2.6.9"
+val AkkaVersion = "2.6.10"
 val AkkaHttpVersion = "10.2.1"
 
 inThisBuild(

@@ -2,41 +2,38 @@ package com.marcus.sensor
 
 import java.nio.ByteBuffer
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-
 import akka.NotUsed
-import akka.event.LoggingAdapter
+import akka.actor.ActorSystem
+import akka.stream.RestartSettings
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 import akka.stream.scaladsl.StreamConverters
 import com.fazecast.jSerialComm.SerialPort
 
+import scala.math._
+
 class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String)(implicit
-  log: LoggingAdapter,
-  executionContext: ExecutionContext
-) {
+  system: ActorSystem
+) extends Reader {
+  import system.{dispatcher, log}
 
-  private val alpha = 0.5
+  private val alpha = 1d - 1d / E
 
-  private def emwa(alpha: Double)(tminus1: Reading, t: Reading) =
-    t.copy(
-      value = alpha * t.value + (1 - alpha) * tminus1.value
-    )
-
-  private val alphaEmwa = emwa(alpha)(_, _)
+  private val alphaEWMA = Reading.ewma(alpha)(_, _)
 
   @inline
   private def baToDouble(ba: Array[Byte]): Double =
     ByteBuffer.wrap(ba).order(java.nio.ByteOrder.LITTLE_ENDIAN).getShort().toDouble / 10
 
-  lazy val feedData: Source[Reading, NotUsed] = RestartSource.withBackoff(
+  private val restartSettings: RestartSettings = RestartSettings(
     minBackoff = 10.seconds,
     maxBackoff = 1.minute,
-    randomFactor = 0.2, // adds 20% "noise" to vary the intervals slightly
-    maxRestarts = 20 // limits the amount of restarts to 20
-  ) { () =>
+    randomFactor = 0.2
+  ).withMaxRestarts(20, within = 20.minutes)
+
+  lazy val feed: Source[Reading, NotUsed] = RestartSource.withBackoff(restartSettings) { () =>
     log.info(s"Ensuring port is closed ${comPort.closePort}")
     comPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0)
     log.info(s"Opening port ${comPort.openPort}")
@@ -57,8 +54,8 @@ class SDS011(comPort: SerialPort, pm25FeedName: String, pm10FeedName: String)(im
       .async
       .conflate((oldReadings, newReadings) => {
         Seq(
-          alphaEmwa(oldReadings.head, newReadings.head),
-          alphaEmwa(oldReadings.last, newReadings.last)
+          alphaEWMA(oldReadings.head, newReadings.head),
+          alphaEWMA(oldReadings.last, newReadings.last)
         )
       })
       .log("conflated")

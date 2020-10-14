@@ -4,7 +4,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.actor.CoordinatedShutdown
@@ -17,12 +16,12 @@ import com.marcus.sensor.SDS011
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import akka.http.scaladsl.model.HttpResponse
+import akka.stream.RestartSettings
 import com.marcus.sensor.Reading
 
 object Application extends App {
 
   implicit val sys: ActorSystem = ActorSystem("air-quality")
-  import sys.dispatcher
   implicit val log: LoggingAdapter = sys.log
   val config: Config = ConfigFactory.load().getConfig("air-quality")
   log.debug(config.toString)
@@ -38,7 +37,9 @@ object Application extends App {
   val comPort: SerialPort = SerialPort.getCommPort(sensorPortName)
 
   val feedData: Source[Reading, NotUsed] =
-    new SDS011(comPort, pm25FeedName, pm10FeedName).feedData
+    new SDS011(comPort, pm25FeedName, pm10FeedName).feed
+
+  val feeds: Source[Reading, NotUsed] = Source.combine(feedData, Source.empty[Reading])(Merge(_))
 
   val httpFlow: Flow[Reading, HttpResponse, NotUsed] = new AdafruitAccessor(
     username,
@@ -63,13 +64,13 @@ object Application extends App {
       .log("sent")
       .mapMaterializedValue(_ => NotUsed)
 
+  private val restartSettings: RestartSettings = RestartSettings(
+    minBackoff = 500.milliseconds,
+    maxBackoff = 2.minutes,
+    randomFactor = 0.2
+  ).withMaxRestarts(Integer.MAX_VALUE, within = 10.days)
   RestartSource
-    .withBackoff(
-      minBackoff = 500.milliseconds,
-      maxBackoff = 2.minutes,
-      randomFactor = 0.2,
-      maxRestarts = 100000
-    ) { () => mainFlow }
+    .withBackoff(restartSettings) { () => mainFlow }
     .runWith(Sink.onComplete {
       case Success(done) =>
         log.info(s"Completed: $done")
