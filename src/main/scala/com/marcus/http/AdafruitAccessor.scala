@@ -2,12 +2,12 @@ package com.marcus.http
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpHeader.ParsingResult
 import akka.http.scaladsl.model._
+import akka.stream.ThrottleMode
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.RetryFlow
 import com.marcus.sensor.Reading
@@ -15,6 +15,7 @@ import com.marcus.sensor.Reading
 class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitPerMinute: Int)(
   implicit system: ActorSystem
 ) {
+
   import system.{dispatcher, log}
 
   lazy val httpFlow: Flow[Reading, HttpResponse, NotUsed] = {
@@ -22,7 +23,7 @@ class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitP
       .mapAsyncUnordered(4)(createDataRequest)
       .log("http")
       .async
-      .throttle(adafruitRateLimitPerMinute, 1.minutes)
+      .throttle(adafruitRateLimitPerMinute, 1.minutes, 2, ThrottleMode.Shaping)
       .via(poolClientFlow)
       .async
       .log("sent")
@@ -30,7 +31,7 @@ class AdafruitAccessor(username: String, adafruitKey: String, adafruitRateLimitP
 
   lazy val poolClientFlow: Flow[(HttpRequest, Reading), HttpResponse, Http.HostConnectionPool] = {
     val flow =
-      Http().cachedHostConnectionPool[Reading]("io.adafruit.com").mapAsync(1) { e =>
+      Http().cachedHostConnectionPool[Reading]("io.adafruit.com").mapAsyncUnordered(4) { e =>
         e._1.map(_.entity.discardBytes())
         Future.fromTry(e._1)
       }

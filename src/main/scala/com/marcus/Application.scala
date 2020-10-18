@@ -1,7 +1,7 @@
 package com.marcus
 
 import scala.concurrent.Await
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.util.Failure
 import scala.util.Success
 import akka.NotUsed
@@ -12,12 +12,12 @@ import akka.http.scaladsl.Http
 import akka.stream.scaladsl._
 import com.fazecast.jSerialComm.SerialPort
 import com.marcus.http.AdafruitAccessor
-import com.marcus.sensor.SDS011
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import akka.http.scaladsl.model.HttpResponse
 import akka.stream.RestartSettings
 import com.marcus.sensor.Reading
+import com.marcus.sensor.sds011.SDS011
 
 object Application extends App {
 
@@ -34,10 +34,12 @@ object Application extends App {
 
   val sensorPortName: String = config.getString("sensor.sds011.port-name")
 
+  val sdsReadTime: FiniteDuration =
+    config.getString("sensor.sds011.poll-interval-seconds").toInt.seconds
+
   val comPort: SerialPort = SerialPort.getCommPort(sensorPortName)
 
-  val feedData: Source[Reading, NotUsed] =
-    new SDS011(comPort, pm25FeedName, pm10FeedName).feed
+  val feedData: Source[Reading, NotUsed] = SDS011(comPort, sdsReadTime, pm25FeedName, pm10FeedName)
 
   val feeds: Source[Reading, NotUsed] = Source.combine(feedData, Source.empty[Reading])(Merge(_))
 
