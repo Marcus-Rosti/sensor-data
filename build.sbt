@@ -32,9 +32,10 @@ lazy val root = project
         ),
     mainClass in assembly := Some("com.marcus.Application"),
     libraryDependencies ++= Seq(
-          "com.fazecast" % "jSerialComm" % "2.6.2",
           "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
           "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-          "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion
+          "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
+          "com.fazecast" % "jSerialComm" % "2.6.2",
+          "com.pi4j" % "pi4j-core" % "1.1"
         )
   )
